@@ -85,11 +85,11 @@ def save_image(matrix: np.ndarray, folder: str, filename: str) -> None:
     """
     # We apply a colormap.
     cm = plt.get_cmap('gist_heat')
-    color_matrix = cm(matrix.T)
+    color_matrix = cm(matrix)
     # We convert the values in the image to go from 0 to 255 and be ints.
     int_matrix = (color_matrix[:, :, :3] * 255).astype('uint8')
     # Save matrix as image.
     image = Image.fromarray(int_matrix)
-    save_path = os.path.join(folder, filename)
-    image.save(save_path)
+    save_path = Path(folder, filename)
+    image.save(str(save_path))
 

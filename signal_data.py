@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from torch.utils.data import Dataset
 
 import utils_io
 import numpy as np
@@ -10,7 +11,7 @@ TEST_DATA_DIR = 'UCI HAR Dataset/test/Inertial Signals'
 TEST_LABELS = 'UCI HAR Dataset/test/y_test.txt'
 ACTIVITY_LABELS = 'UCI HAR Dataset/activity_labels.txt'
 
-class ActivityData:
+class SignalData():
 
     # 6
     @property
@@ -54,9 +55,9 @@ class ActivityData:
         self.train_labels = self._read_labels(local_dir_name, TRAIN_LABELS)
         # 2947
         self.test_labels = self._read_labels(local_dir_name, TEST_LABELS)
-        # 7352 x 128 x 9
+        # 7352 x 9 x 128
         self.train_signals = self._read_signals(local_dir_name, TRAIN_DATA_DIR)
-        # 2947 x 128 x 9
+        # 2947 x 9 x 128
         self.test_signals = self._read_signals(local_dir_name, TEST_DATA_DIR)
 
     def _read_activity_labels(self, local_dir_name: str, relative_path: str) -> dict:
@@ -95,6 +96,7 @@ class ActivityData:
             signals_list.append(rows)
         # signals is now 9 x samples x 128
         signals = np.array(signals_list)
-        signals = np.transpose(signals, (1, 2, 0))
+        # we want signals to have dims samples x 9 x 128
+        signals = np.transpose(signals, (1, 0, 2))
         return signals
 
