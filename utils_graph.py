@@ -88,3 +88,36 @@ def graph_overlapping_lines(x: np.ndarray, y: np.ndarray, legend: List[str],
         title_text=title,
     )
     pio.write_html(fig, str(path))
+
+
+def graph_2d_line(x: np.ndarray, y: np.ndarray, 
+    xaxis_title: str, yaxis_title: str, title: str, 
+    dir_name: str, file_name: str) -> None:
+    """Creates a simple 2D plot using lines.
+    Args:
+        x (np.ndarray): A vector with the x values.
+        y (np.ndarray): A vector with the y values.
+        xaxis_title (str): The title of the x axis.
+        yaxis_title (str): The title of the y axis.
+        title (str): The title of the graph.
+        dir_name (str): The folder where we want to save the graph.
+        file_name (str): The name of the file where we'll save the graph.
+    """
+    path = Path(dir_name, file_name)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode='lines',
+            marker_color=COLORS[0],
+            marker_size=10,
+        )
+    )
+    fig.update_layout(
+        title_text=title,
+        xaxis_title_text=xaxis_title,
+        yaxis_title_text=yaxis_title,
+    )
+    pio.write_html(fig, str(path))

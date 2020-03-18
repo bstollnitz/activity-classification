@@ -249,7 +249,7 @@ def _classify_grams(full_train_labels: np.ndarray, test_labels: np.ndarray,
     test_labels = test_labels - 1
 
     # Get training, validation and test generators.
-    batch_size = 512
+    batch_size = 32
     num_workers = 0
     (training_generator, validation_generator) = get_trainval_generators(
         full_train_data_path, full_train_labels, batch_size, num_workers)
@@ -259,18 +259,19 @@ def _classify_grams(full_train_labels: np.ndarray, test_labels: np.ndarray,
     # Cross entropy loss = softmax + negative log likelihood.
     loss_function = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(cnn.parameters(), lr=0.001)
-    max_epochs = 10
-
-    # Convert the model parameters to torch's float. 
-    cnn = cnn.float()
+    max_epochs = 1
 
     # Use CUDA.
     use_cuda = torch.cuda.is_available()
     device = torch.device('cuda:0' if use_cuda else 'cpu')
     # With benchmark enabled, cuDNN figures out which algorithm is most 
-    # performant for our model.
-    # As a result, training time is sped up if input shapes are fixed.
-    # cudnn.benchmark = True
+    # performant for our model, and this speeds up performance for larger
+    # CNNs. In this cenario it made no difference in performance, so we'll
+    # leave the defaults.
+    # torch.backends.cudnn.benchmark = True
+
+    # Convert the model parameters to torch's float. 
+    cnn = cnn.float().to(device)
 
     training_accuracy_list = []
     training_loss_list = []
@@ -289,7 +290,7 @@ def _classify_grams(full_train_labels: np.ndarray, test_labels: np.ndarray,
         for batch_data, batch_labels in tqdm(training_generator):
             # Transfer to GPU.
             batch_data = batch_data.to(device)
-            batch_labels = batch_labels.to(device)
+            batch_labels = batch_labels.long().to(device)
             # Zero-out the optimizer's gradients.
             optimizer.zero_grad()
             # Forward pass, backward pass, optimize.
@@ -299,14 +300,14 @@ def _classify_grams(full_train_labels: np.ndarray, test_labels: np.ndarray,
             optimizer.step()
             # Gather statistics.
             batch_accuracy = _calculate_accuracy(batch_output, batch_labels)
-            training_accuracy_list.append(batch_accuracy)
-            training_loss_list.append(batch_loss.item())
             training_cummulative_accuracy += batch_accuracy
-            training_cummulative_loss += batch_loss
+            training_cummulative_loss += batch_loss.item()
             training_batch_num += 1
 
         training_avg_accuracy = training_cummulative_accuracy / training_batch_num
         training_avg_loss = training_cummulative_loss / training_batch_num
+        training_accuracy_list.append(training_avg_accuracy)
+        training_loss_list.append(training_avg_loss)
         print(f'  Training accuracy: {training_avg_accuracy:0.2f}' + 
             f'  Training loss: {training_avg_loss:0.2f}')
 
@@ -315,19 +316,22 @@ def _classify_grams(full_train_labels: np.ndarray, test_labels: np.ndarray,
         validation_cummulative_accuracy = 0
         validation_cummulative_loss = 0
         for batch_data, batch_labels in tqdm(validation_generator):
+            # Transfer to GPU.
+            batch_data = batch_data.to(device)
+            batch_labels = batch_labels.long().to(device)
             # Predict.
             batch_output = cnn(batch_data.float())
             batch_loss = loss_function(batch_output, batch_labels)
             # Gather statistics.
             batch_accuracy = _calculate_accuracy(batch_output, batch_labels)
-            validation_accuracy_list.append(batch_accuracy)
-            validation_loss_list.append(batch_loss.item())
             validation_cummulative_accuracy += batch_accuracy
-            validation_cummulative_loss += batch_loss
+            validation_cummulative_loss += batch_loss.item()
             validation_batch_num += 1
 
         validation_avg_accuracy = validation_cummulative_accuracy / validation_batch_num
         validation_avg_loss = validation_cummulative_loss / validation_batch_num
+        validation_accuracy_list.append(validation_avg_accuracy)
+        validation_loss_list.append(validation_avg_loss)
         print(f'  Validation accuracy: {validation_avg_accuracy:0.2f}' + 
             f'  Validation loss: {validation_avg_loss:0.2f}')
 
@@ -341,6 +345,9 @@ def _classify_grams(full_train_labels: np.ndarray, test_labels: np.ndarray,
 
     # Test data.
     for batch_data, batch_labels in tqdm(test_generator):
+        # Transfer to GPU.
+        batch_data = batch_data.to(device)
+        batch_labels = batch_labels.long().to(device)
         # Predict.
         batch_output = cnn(batch_data.float())
         batch_loss = loss_function(batch_output, batch_labels)
@@ -354,8 +361,7 @@ def _classify_grams(full_train_labels: np.ndarray, test_labels: np.ndarray,
     print(f'  Test accuracy: {test_avg_accuracy:0.2f}' + 
         f'  Test loss: {test_avg_loss:0.2f}')
 
-    elapsed_time = time.time() - start_time
-    print(f'  Elapsed time: {elapsed_time}')
+    utils_io.print_elapsed_time(start_time, time.time())
 
 
 def _get_gaussian_filter(b: float, b_list: np.ndarray, 
@@ -418,7 +424,7 @@ def scenario2(data: SignalData) -> None:
     _save_grams(data.test_signals, SPECTROGRAMS_TEST_FILE_NAME, 'spectrograms')
     _save_gram_images(data.test_labels, data.activity_labels, 'spectrograms')
 
-    # _classify_grams(data.train_labels, data.test_labels, 'spectrograms')
+    _classify_grams(data.train_labels, data.test_labels, 'spectrograms')
 
 
 def _create_scaleogram(signal: np.ndarray, graph_wavelet_signal: bool) -> np.ndarray:
@@ -468,6 +474,25 @@ def _create_scaleogram(signal: np.ndarray, graph_wavelet_signal: bool) -> np.nda
 
     return scaleogram
 
+def _save_wavelets() -> None:
+    """Saves three different kinds of mother wavelets to be used in the 
+    theoretical part of the report.
+    """
+    n = 100
+    wavelet_names = ['gaus1', 'mexh', 'morl']
+    titles = ['Gaussian wavelet', 'Mexican hat wavelet', 'Morlet wavelet']
+    file_names = ['gaussian.html', 'mexican_hat.html', 'morlet.html']
+    for i in range(len(wavelet_names)):
+        file_name = file_names[i]
+        path = Path(PLOTS_FOLDER, file_name)
+        if not path.exists():
+            wavelet_name = wavelet_names[i]
+            wavelet = pywt.ContinuousWavelet(wavelet_name)
+            [wavelet_fun, x] = wavelet.wavefun(length=n)
+            utils_graph.graph_2d_line(x, wavelet_fun, 
+                'Time', 'Amplitude', titles[i], 
+                PLOTS_FOLDER, file_name)
+
 
 def scenario3(data: SignalData) -> None:
     """Creates scaleograms for each of the signals, and uses a CNN to 
@@ -477,6 +502,7 @@ def scenario3(data: SignalData) -> None:
     _save_grams(data.train_signals, SCALEOGRAMS_TRAIN_FILE_NAME, 'scaleograms')
     _save_grams(data.test_signals, SCALEOGRAMS_TEST_FILE_NAME, 'scaleograms')
     _save_gram_images(data.test_labels, data.activity_labels, 'scaleograms')
+    _save_wavelets()
     _classify_grams(data.train_labels, data.test_labels, 'scaleograms')
 
 

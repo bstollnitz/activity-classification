@@ -10,48 +10,48 @@ class CNN(nn.Module):
 
         self.conv1 = nn.Conv2d(
             in_channels = 9, # number of channels
-            out_channels = 18, # number of filters
+            out_channels = 9, # number of filters
             kernel_size = 3,
             stride = 1,
             padding = 1 # this stride and padding don't change the (height, width) dims
             )
         self.maxpool = nn.MaxPool2d(kernel_size = 2) 
         self.conv2 = nn.Conv2d(
-            in_channels = 18, # because we have 18 filters in conv1
-            out_channels = 36, # number of filters
+            in_channels = 9, # because we have 9 filters in conv1
+            out_channels = 9, # number of filters
             kernel_size = 3,
             stride = 1,
             padding = 1
             )
-        self.fc1 = nn.Linear(36*32*32, 20000)
-        self.fc2 = nn.Linear(20000, 5000)
-        self.fc3 = nn.Linear(5000, 6)
+        self.fc1 = nn.Linear(9*32*32, 1000)
+        self.fc2 = nn.Linear(1000, 100)
+        self.fc3 = nn.Linear(100, 6)
 
     def forward(self, x):
         # Each data point has dims 9 x 128 x 128 = 147,456.
 
         # Layer 1.
         x = nn.functional.relu(self.conv1(x))
-        # Each data point has dims 18 x 128 x 128 = 294,912.
+        # Each data point has dims 9 x 128 x 128 = 147,456.
         x = self.maxpool(x)
-        # Each data point has dims 18 x 64 x 64 = 73,738.
+        # Each data point has dims 9 x 64 x 64 = 36,864.
 
         # Layer 2.
         x = nn.functional.relu(self.conv2(x))
-        # Each data point has dims 36 x 64 x 64 = 147,456.
+        # Each data point has dims 9 x 64 x 64 = 36,864.
         x = self.maxpool(x)
-        # Each data point has dims 36 x 32 x 32 = 36,864.
+        # Each data point has dims 9 x 32 x 32 = 9,216.
 
-        # Reshape data from (36, 32, 32) to (1, 36864).
-        x = x.view(-1, 36*32*32)
+        # Reshape data from (9, 32, 32) to (1, 9216).
+        x = x.view(-1, 9*32*32)
 
         # Layer 3.
         x = nn.functional.relu(self.fc1(x))
-        # Each data point has dims a 20,000 horizontal vector.
+        # Each data point has dims a 1,000 horizontal vector.
 
         # Layer 4.
         x = nn.functional.relu(self.fc2(x))
-        # Each data point is now a 5,000 horizontal vector.
+        # Each data point is now a 100 horizontal vector.
 
         # Layer 5.
         x = self.fc3(x)

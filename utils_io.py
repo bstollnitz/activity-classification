@@ -7,7 +7,6 @@ from urllib.request import urlopen
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.io.wavfile as wavfile
 from PIL import Image
 
 
@@ -78,9 +77,7 @@ def save_image(matrix: np.ndarray, folder: str, filename: str) -> None:
         as an image. 
         Assumes matrix shape is height by width of the image. 
         Assumes matrix values lie between 0 and 1. 
-        
         folder (str): The folder where we want to save the image.
-
         filename (str): The name of the image file.
     """
     # We apply a colormap.
@@ -93,3 +90,17 @@ def save_image(matrix: np.ndarray, folder: str, filename: str) -> None:
     save_path = Path(folder, filename)
     image.save(str(save_path))
 
+
+def print_elapsed_time(start_time: float, end_time: float) -> None:
+    """Prints time elapsed between start_time and end_time, formatted as
+    HH:MM:SS.
+
+    Args:
+        start_time (float): Start time.
+        end_time (float): End time.
+    """
+
+    elapsed_seconds = int(end_time - start_time)
+    (elapsed_minutes, elapsed_seconds) = divmod(elapsed_seconds, 60)
+    (elapsed_hours, elapsed_minutes) = divmod(elapsed_minutes, 60)
+    print(f'  Elapsed time: {elapsed_hours:02d}:{elapsed_minutes:02d}:{elapsed_seconds:02d}')
