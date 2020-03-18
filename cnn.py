@@ -2,6 +2,10 @@ import torch.nn as nn
 
 class CNN(nn.Module):
 
+    @property
+    def loss_function(self):
+        return self._loss_function
+
     def __init__(self) -> None:
         super(CNN, self).__init__()
 
@@ -26,6 +30,16 @@ class CNN(nn.Module):
         self.fc1 = nn.Linear(9*32*32, 1000)
         self.fc2 = nn.Linear(1000, 100)
         self.fc3 = nn.Linear(100, 6)
+
+        # Cross entropy loss = softmax + negative log likelihood.
+        self._loss_function = nn.CrossEntropyLoss()
+
+        # Convert the model parameters to torch's float so they match 
+        # input type.
+        self.float()
+
+        print(f'  {self}')
+
 
     def forward(self, x):
         # Each data point has dims 9 x 128 x 128 = 147,456.

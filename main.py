@@ -9,13 +9,16 @@ import torch
 from torch.utils import data
 import h5py
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 import utils_graph
 import utils_io
+import utils_nn
 from signal_data import SignalData
 from cnn import CNN
 from feed_forward import FeedForward
 from gram_data import GramData
+from hyperparameters import Hyperparameters
 
 S3_URL = 'https://bea-portfolio.s3-us-west-2.amazonaws.com/activity-classification/'
 S3_FILENAME = 'activity-dataset.zip'
@@ -33,22 +36,17 @@ SCALEOGRAMS_DATA_FOLDER = 'scaleograms/data'
 SCALEOGRAMS_TRAIN_FILE_NAME = 'train_scaleograms.hdf5'
 SCALEOGRAMS_TEST_FILE_NAME = 'test_scaleograms.hdf5'
 
+USE_CUDA = torch.cuda.is_available()
+
 
 def ensure_reproducibility() -> None:
     """Ensures reproducibility of results.
     """
-    np.random.seed(1)
     random.seed(1)
+    np.random.seed(1)
     torch.manual_seed(1)
-
-
-def _calculate_accuracy(output: torch.Tensor, labels: torch.Tensor) -> float:
-    """Calculates accuracy of multiclass prediction.
-    """
-    num_correct = (torch.argmax(output, dim=1) == labels).sum()
-    num_train = len(labels)
-    accuracy = (float(num_correct) / float(num_train)) * 100
-    return accuracy
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def scenario1(data: SignalData) -> None:
@@ -214,154 +212,157 @@ def get_trainval_generators(full_train_data_path: Path, train_labels:
     return (training_generator, validation_generator)
 
 
-def get_test_generator(test_data_path: Path, test_labels: 
-    np.ndarray, batch_size: int, num_workers: int) -> data.DataLoader:
-    """Gets generator for test data.
+def _calculate_accuracy(output: torch.Tensor, actual_labels: torch.Tensor) -> float:
+    """Calculates accuracy of multiclass prediction.
+
+    Args:
+        output (torch.Tensor): Output predictions from neural network.
+        actual_labels (torch.Tensor): Actual labels.
     """
-    test_data = GramData(test_data_path, test_labels)
-    params = {'batch_size': batch_size, 'shuffle': True, 'num_workers': num_workers}
-    test_generator = data.DataLoader(test_data, **params)
-    return test_generator
+    predicted_labels = torch.argmax(output, dim=1)
+    num_correct = (predicted_labels == actual_labels).sum()
+    num_train = len(actual_labels)
+    accuracy = (float(num_correct) / float(num_train)) * 100
+    return accuracy
 
 
-def _classify_grams(full_train_labels: np.ndarray, test_labels: np.ndarray, 
-    gram_type: str) -> None:
-    """Classifies spectrograms or scaleograms using a CNN.
+def _train_network(hyperparameter_dict: dict, full_train_labels: np.ndarray, 
+    gram_type: str) -> Tuple[CNN, List, List, List, List]:
+    """Trains a CNN using the specified hyperparameters.
     """
-    print('  Classifying images.')
-    start_time = time.time()
-
     if gram_type == 'spectrograms':
         full_train_data_path = Path(SPECTROGRAMS_DATA_FOLDER, SPECTROGRAMS_TRAIN_FILE_NAME)
-        test_data_path = Path(SPECTROGRAMS_DATA_FOLDER, SPECTROGRAMS_TEST_FILE_NAME)
     elif gram_type == 'scaleograms':
         full_train_data_path = Path(SCALEOGRAMS_DATA_FOLDER, SCALEOGRAMS_TRAIN_FILE_NAME)
-        test_data_path = Path(SCALEOGRAMS_DATA_FOLDER, SCALEOGRAMS_TEST_FILE_NAME)
     else:
         raise Exception('gram_type must be "spectrograms" or "scaleograms"')
 
-    # Crete CNN.
-    cnn = CNN()
-    print(f'  {cnn}')
+    # Print hyperparameters.
+    print(f'Hyperparameters: {hyperparameter_dict}')
+
+    # Get hyperparameters.
+    learning_rate = hyperparameter_dict['learning_rate']
+    batch_size = hyperparameter_dict['batch_size']
 
     # There are 6 labels, and Pytorch expects them to go from 0 to 5.
     full_train_labels = full_train_labels - 1
-    test_labels = test_labels - 1
 
-    # Get training, validation and test generators.
-    batch_size = 32
+    # Get generators.
     num_workers = 0
     (training_generator, validation_generator) = get_trainval_generators(
         full_train_data_path, full_train_labels, batch_size, num_workers)
-    test_generator = get_test_generator(test_data_path, test_labels, 
-        batch_size, num_workers)
 
-    # Cross entropy loss = softmax + negative log likelihood.
-    loss_function = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(cnn.parameters(), lr=0.001)
-    max_epochs = 1
+    # Crete CNN.
+    cnn = CNN()
 
-    # Use CUDA.
-    use_cuda = torch.cuda.is_available()
-    device = torch.device('cuda:0' if use_cuda else 'cpu')
-    # With benchmark enabled, cuDNN figures out which algorithm is most 
-    # performant for our model, and this speeds up performance for larger
-    # CNNs. In this cenario it made no difference in performance, so we'll
-    # leave the defaults.
-    # torch.backends.cudnn.benchmark = True
-
-    # Convert the model parameters to torch's float. 
-    cnn = cnn.float().to(device)
+    # Optimizer.
+    optimizer = torch.optim.Adam(cnn.parameters(), lr=learning_rate)
 
     training_accuracy_list = []
     training_loss_list = []
     validation_accuracy_list = []
     validation_loss_list = []
-    test_accuracy_list = []
-    test_loss_list = []
-
+    max_epochs = 10
     for epoch in range(max_epochs):
         print(f'Epoch {epoch}')
 
         # Training data.
-        training_batch_num = 0
-        training_cummulative_accuracy = 0
-        training_cummulative_loss = 0
-        for batch_data, batch_labels in tqdm(training_generator):
-            # Transfer to GPU.
-            batch_data = batch_data.to(device)
-            batch_labels = batch_labels.long().to(device)
-            # Zero-out the optimizer's gradients.
-            optimizer.zero_grad()
-            # Forward pass, backward pass, optimize.
-            batch_output = cnn(batch_data.float())
-            batch_loss = loss_function(batch_output, batch_labels)
-            batch_loss.backward()
-            optimizer.step()
-            # Gather statistics.
-            batch_accuracy = _calculate_accuracy(batch_output, batch_labels)
-            training_cummulative_accuracy += batch_accuracy
-            training_cummulative_loss += batch_loss.item()
-            training_batch_num += 1
-
-        training_avg_accuracy = training_cummulative_accuracy / training_batch_num
-        training_avg_loss = training_cummulative_loss / training_batch_num
+        (training_avg_accuracy, training_avg_loss) = utils_nn.fit(cnn, 
+            training_generator, optimizer, USE_CUDA)
         training_accuracy_list.append(training_avg_accuracy)
         training_loss_list.append(training_avg_loss)
-        print(f'  Training accuracy: {training_avg_accuracy:0.2f}' + 
-            f'  Training loss: {training_avg_loss:0.2f}')
 
         # Validation data.
-        validation_batch_num = 0
-        validation_cummulative_accuracy = 0
-        validation_cummulative_loss = 0
-        for batch_data, batch_labels in tqdm(validation_generator):
-            # Transfer to GPU.
-            batch_data = batch_data.to(device)
-            batch_labels = batch_labels.long().to(device)
-            # Predict.
-            batch_output = cnn(batch_data.float())
-            batch_loss = loss_function(batch_output, batch_labels)
-            # Gather statistics.
-            batch_accuracy = _calculate_accuracy(batch_output, batch_labels)
-            validation_cummulative_accuracy += batch_accuracy
-            validation_cummulative_loss += batch_loss.item()
-            validation_batch_num += 1
-
-        validation_avg_accuracy = validation_cummulative_accuracy / validation_batch_num
-        validation_avg_loss = validation_cummulative_loss / validation_batch_num
+        (validation_avg_accuracy, validation_avg_loss) = utils_nn.evaluate(cnn, 
+            validation_generator, 'Validation', USE_CUDA)
         validation_accuracy_list.append(validation_avg_accuracy)
         validation_loss_list.append(validation_avg_loss)
-        print(f'  Validation accuracy: {validation_avg_accuracy:0.2f}' + 
-            f'  Validation loss: {validation_avg_loss:0.2f}')
+
+    return (cnn, training_accuracy_list, training_loss_list, 
+        validation_accuracy_list, validation_loss_list)
+
+
+def _tune_cnn_hyperparameters(full_train_labels: np.ndarray, 
+    gram_type: str) -> None:
+    """Classifies spectrograms or scaleograms using a CNN.
+    """
+    print('  Tuning hyperparameters.')
+    start_time = time.time()
+
+    # Hyperparameters to tune.
+    # [0.1, 0.05, 0.01, 0.005, 0.001]
+    hyperparameter_values = Hyperparameters({
+        'learning_rate': [0.005, 0.001],
+        'batch_size': [32, 64],
+        })
+    hyperparameter_combinations = hyperparameter_values.sample_combinations()
+
+    # Create Tensorboard writer.
+    with SummaryWriter('runs', filename_suffix='') as writer:
+        # Hyperparameter loop.
+        for hyperparameter_dict in hyperparameter_combinations:
+            (_, _, _, validation_accuracy_list, _) = _train_network(
+                hyperparameter_dict, full_train_labels, gram_type)
+
+            writer.add_hparams(hyperparameter_dict,
+                {'hparam/validation_accuracy': validation_accuracy_list[-1]})
+
+    utils_io.print_elapsed_time(start_time, time.time())
+
+
+def _test_network(cnn: CNN, test_labels: np.ndarray, hyperparameter_dict: dict, 
+    gram_type: str) -> Tuple[float, float]:
+    """Returns accuracy and loss of specified CNN for specified test data and
+    specified hyperparameters.
+    """
+    if gram_type == 'spectrograms':
+        test_data_path = Path(SPECTROGRAMS_DATA_FOLDER, SPECTROGRAMS_TEST_FILE_NAME)
+    elif gram_type == 'scaleograms':
+        test_data_path = Path(SCALEOGRAMS_DATA_FOLDER, SCALEOGRAMS_TEST_FILE_NAME)
+    else:
+        raise Exception('gram_type must be "spectrograms" or "scaleograms"')
+
+    # There are 6 labels, and Pytorch expects them to go from 0 to 5.
+    test_labels = test_labels - 1
+
+    # Get test generator.
+    batch_size = hyperparameter_dict['batch_size']
+    test_data = GramData(test_data_path, test_labels)
+    params = {'batch_size': batch_size, 'shuffle': True, 'num_workers': 0}
+    test_generator = data.DataLoader(test_data, **params)
+
+    (test_avg_accuracy, test_avg_loss) = utils_nn.evaluate(cnn, test_generator, 
+        'Test', USE_CUDA)
+
+    return (test_avg_accuracy, test_avg_loss)
+
+
+def _test_best_cnn_hyperparameters(full_train_labels: np.ndarray, 
+    test_labels: np.ndarray, gram_type: str) -> None:
+    """Use CNN with best hyperparameters to predict labels for test data.
+    Produce accuracy and loss graphs
+    for training and validation data, as well as accuracy and loss values for 
+    test data.
+    """
+    hyperparameter_dict = {
+        'learning_rate': 0.001,
+        'batch_size': 64,
+        }
+    (cnn, training_accuracy_list, 
+        training_loss_list, 
+        validation_accuracy_list, 
+        validation_loss_list) = _train_network(hyperparameter_dict, 
+        full_train_labels, gram_type)
 
     utils_graph.graph_nn_results(training_accuracy_list, validation_accuracy_list, 
-        f'Accuracy of classification of {gram_type}', 
+        f'Training and validation accuracy of classification of {gram_type}', 
         'Accuracy', PLOTS_FOLDER, f'3_{gram_type}_accuracy.html')
 
     utils_graph.graph_nn_results(training_loss_list, validation_loss_list, 
-        f'Loss of classification of {gram_type}', 
+        f'Training and validation loss of classification of {gram_type}', 
         'Loss', PLOTS_FOLDER, f'3_{gram_type}_loss.html')
 
-    # Test data.
-    for batch_data, batch_labels in tqdm(test_generator):
-        # Transfer to GPU.
-        batch_data = batch_data.to(device)
-        batch_labels = batch_labels.long().to(device)
-        # Predict.
-        batch_output = cnn(batch_data.float())
-        batch_loss = loss_function(batch_output, batch_labels)
-        # Gather statistics.
-        batch_accuracy = _calculate_accuracy(batch_output, batch_labels)
-        test_accuracy_list.append(batch_accuracy)
-        test_loss_list.append(batch_loss.item())
-
-    test_avg_accuracy = np.average(test_accuracy_list)
-    test_avg_loss = np.average(test_loss_list)
-    print(f'  Test accuracy: {test_avg_accuracy:0.2f}' + 
-        f'  Test loss: {test_avg_loss:0.2f}')
-
-    utils_io.print_elapsed_time(start_time, time.time())
+    _test_network(cnn, test_labels, hyperparameter_dict, gram_type)
 
 
 def _get_gaussian_filter(b: float, b_list: np.ndarray, 
@@ -424,7 +425,8 @@ def scenario2(data: SignalData) -> None:
     _save_grams(data.test_signals, SPECTROGRAMS_TEST_FILE_NAME, 'spectrograms')
     _save_gram_images(data.test_labels, data.activity_labels, 'spectrograms')
 
-    _classify_grams(data.train_labels, data.test_labels, 'spectrograms')
+    _tune_cnn_hyperparameters(data.train_labels, 'spectrograms')
+    _test_best_cnn_hyperparameters(data.train_labels, data.test_labels, 'spectrograms')
 
 
 def _create_scaleogram(signal: np.ndarray, graph_wavelet_signal: bool) -> np.ndarray:
@@ -503,8 +505,8 @@ def scenario3(data: SignalData) -> None:
     _save_grams(data.test_signals, SCALEOGRAMS_TEST_FILE_NAME, 'scaleograms')
     _save_gram_images(data.test_labels, data.activity_labels, 'scaleograms')
     _save_wavelets()
-    _classify_grams(data.train_labels, data.test_labels, 'scaleograms')
-
+    _tune_cnn_hyperparameters(data.train_labels, 'scaleograms')
+    # _test_best_cnn_hyperparameters(data.train_labels, data.test_labels, 'scaleograms')
 
 def main() -> None:
     """Main program.
