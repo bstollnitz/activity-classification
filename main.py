@@ -433,7 +433,7 @@ def _test_best_cnn_hyperparameters(full_train_labels: np.ndarray,
 
     _test_network(cnn, test_labels, hyperparameter_dict, gram_type)
 
-    with SummaryWriter('runs', filename_suffix='') as writer:
+    with SummaryWriter(f'runs/{gram_type}', filename_suffix='') as writer:
         num_epochs_train_val = len(training_accuracy_list)
         for i in range(num_epochs_train_val):
             writer.add_scalars(f'{gram_type}/accuracy', {
@@ -450,8 +450,8 @@ def _test_best_cnn_hyperparameters(full_train_labels: np.ndarray,
     # Test loss: 0.4
 
     # Spectrograms
-    # Test accuracy: 
-    # Test loss: 
+    # Test accuracy: 84.54%
+    # Test loss: 0.45
 
 
 def _get_gaussian_filter(b: float, b_list: np.ndarray, 
