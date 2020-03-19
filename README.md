@@ -1,4 +1,4 @@
-# Acivity classification
+# Activity classification
 
 *Technologies:* Python, PyTorch, PyWavelets, NumPy, Plotly, Tensorboard, H5py, Tqdm, PIL. <br>
 *Topics:* deep learning, classification, signal processing, time series. <br>
