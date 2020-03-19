@@ -3,7 +3,7 @@ from torch.utils import data
 from pathlib import Path
 import h5py
 
-class GramData(data.Dataset):
+class GramDataset(data.Dataset):
 
     def __init__(self, grams_path: Path, labels: np.ndarray):
         """Class constructor.
@@ -24,4 +24,3 @@ class GramData(data.Dataset):
         specified index.
         """
         return (self.grams[index, :, :, :], self.labels[index])
-

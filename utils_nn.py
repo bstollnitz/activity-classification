@@ -7,6 +7,25 @@ from torch.utils import data
 from tqdm import tqdm
 
 
+def get_trainval_generators(full_training_data: torch.utils.data.Dataset,
+    batch_size: int, num_workers: int, training_fraction: float) -> Tuple[data.DataLoader, 
+    data.DataLoader]:
+    """Splits the training images and labels into training and validation sets,
+    and returns generators for those.
+    """
+    full_training_len = len(full_training_data)
+    training_len = int(full_training_len * training_fraction)
+    validation_len = full_training_len - training_len
+    (training_data, validation_data) = data.random_split(full_training_data, 
+        [training_len, validation_len])
+
+    params = {'batch_size': batch_size, 'shuffle': True, 'num_workers': num_workers}
+    training_generator = data.DataLoader(training_data, **params)
+    validation_generator = data.DataLoader(validation_data, **params)
+
+    return (training_generator, validation_generator)
+
+
 def _calculate_accuracy(output: torch.Tensor, actual_labels: torch.Tensor) -> float:
     """Calculates accuracy of multiclass prediction.
 

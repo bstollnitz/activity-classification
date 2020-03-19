@@ -1,3 +1,5 @@
+import math
+
 import torch.nn as nn
 
 class CNN(nn.Module):
@@ -33,6 +35,19 @@ class CNN(nn.Module):
 
         # Cross entropy loss = softmax + negative log likelihood.
         self._loss_function = nn.CrossEntropyLoss()
+
+        # Initialize the weights and biases.
+        for layer in [self.conv1, self.conv2]:
+            weight = layer.weight
+            nn.init.xavier_uniform_(weight)
+            if layer.bias is not None:
+                nn.init.zeros_(layer.bias)
+        for layer in [self.fc1, self.fc2, self.fc3]:
+            weight = layer.weight
+            stdv = 1.0 / math.sqrt(weight.size(1))
+            nn.init.uniform_(weight, -stdv, stdv)
+            if layer.bias is not None:
+                nn.init.uniform_(layer.bias, -stdv, stdv)
 
         print(f'  {self}')
 
