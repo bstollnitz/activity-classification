@@ -9,7 +9,7 @@
   <img src="readme_files/spectrograms.png?raw=true" width="700" />
 </p>
 
-In this project, we use three different approaches to classify temporal signals according to the associated activity. Our input data consists of several thousand short snippets of measurements obtained from nine sensors (such as acceleration and gyroscope) while people performed six different activities (such as walking or sitting). In our first approach, we train a simple feed-forward network using the raw temporal signals and associated labels. In our second approach, we compute spectrograms by applying a Gabor transform to the temporal signals, and train a CNN to classify the spectrograms. In our third approach, we compute scaleograms by using a continuous wavelet transform, and train a CNN to classify the scaleograms.
+In this project, I use three different approaches to classify temporal signals according to the associated activity. The input data consists of several thousand short snippets of measurements obtained from nine sensors (such as acceleration and gyroscope) while people performed six different activities (such as walking or sitting). In my first approach, I train a simple feed-forward network using the raw temporal signals and associated labels. In my second approach, I compute spectrograms by applying a Gabor transform to the temporal signals, and train a CNN to classify the spectrograms. In my third approach, I compute scaleograms by using a continuous wavelet transform, and train a CNN to classify the scaleograms.
 
 You can find more details in the <a href="https://1drv.ms/b/s!AiCY1Uw6PbEfheUz1u-obevm2AsltA?e=U0Ls2N">report</a> for this project.
 
