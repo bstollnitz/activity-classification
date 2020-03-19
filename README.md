@@ -1,6 +1,6 @@
 # Activity classification
 
-*Technologies:* Python, PyTorch, PyWavelets, NumPy, Plotly, Tensorboard, H5py, Tqdm, PIL. <br>
+*Technologies:* Python, PyTorch, PyWavelets, NumPy, Plotly, Tensorboard, H5py, Tqdm, Pillow. <br>
 *Topics:* deep learning, classification, signal processing, time series. <br>
 
 ## Description
