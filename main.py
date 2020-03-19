@@ -192,7 +192,7 @@ def _normalize(my_array: np.ndarray) -> np.ndarray:
     return np.abs(my_array)/np.max(np.abs(my_array))
 
 
-def get_trainval_generators(full_train_data_path: Path, train_labels: 
+def _get_trainval_generators(full_train_data_path: Path, train_labels: 
     np.ndarray, batch_size: int, num_workers: int) -> Tuple[data.DataLoader, 
     data.DataLoader]:
     """Splits the training images and labels into training and validation sets,
@@ -243,20 +243,31 @@ def _train_network(hyperparameter_dict: dict, full_train_labels: np.ndarray,
     # Get hyperparameters.
     learning_rate = hyperparameter_dict['learning_rate']
     batch_size = hyperparameter_dict['batch_size']
+    optimizer_str = hyperparameter_dict['optimizer']
 
     # There are 6 labels, and Pytorch expects them to go from 0 to 5.
     full_train_labels = full_train_labels - 1
 
     # Get generators.
     num_workers = 0
-    (training_generator, validation_generator) = get_trainval_generators(
+    (training_generator, validation_generator) = _get_trainval_generators(
         full_train_data_path, full_train_labels, batch_size, num_workers)
 
     # Crete CNN.
     cnn = CNN()
 
-    # Optimizer.
-    optimizer = torch.optim.Adam(cnn.parameters(), lr=learning_rate)
+    # Parameters should be moved to GPU before constructing the optimizer.
+    device = torch.device('cuda:0' if USE_CUDA else 'cpu')
+    cnn = cnn.to(device)
+
+    # Get optimizer.
+    optimizer = None
+    if optimizer_str == 'adam':
+        optimizer = torch.optim.Adam(cnn.parameters(), lr=learning_rate)
+    elif optimizer_str == 'sgd':
+        optimizer = torch.optim.SGD(cnn.parameters(), lr=learning_rate)
+    else:
+        raise Exception(f'Specified optimizer not valid: {optimizer_str}')
 
     training_accuracy_list = []
     training_loss_list = []
@@ -267,20 +278,47 @@ def _train_network(hyperparameter_dict: dict, full_train_labels: np.ndarray,
         print(f'Epoch {epoch}')
 
         # Training data.
-        (training_avg_accuracy, training_avg_loss) = utils_nn.fit(cnn, 
+        (training_accuracy, training_loss) = utils_nn.fit(cnn, 
             training_generator, optimizer, USE_CUDA)
-        training_accuracy_list.append(training_avg_accuracy)
-        training_loss_list.append(training_avg_loss)
+        training_accuracy_list.append(training_accuracy)
+        training_loss_list.append(training_loss)
 
         # Validation data.
-        (validation_avg_accuracy, validation_avg_loss) = utils_nn.evaluate(cnn, 
+        (validation_accuracy, validation_loss) = utils_nn.evaluate(cnn, 
             validation_generator, 'Validation', USE_CUDA)
-        validation_accuracy_list.append(validation_avg_accuracy)
-        validation_loss_list.append(validation_avg_loss)
+        validation_accuracy_list.append(validation_accuracy)
+        validation_loss_list.append(validation_loss)
 
     return (cnn, training_accuracy_list, training_loss_list, 
         validation_accuracy_list, validation_loss_list)
 
+
+def _get_hyperparameters() -> Hyperparameters:
+    """Returns hyperparameters used to tune the network.
+    """
+    # Spectrograms
+
+    # Scaleograms 
+
+    # First pass:
+    # hyperparameter_values = Hyperparameters({
+    #     'learning_rate': [0.1, 0.01, 0.001],
+    #     'batch_size': [32, 64, 128],
+    #     'optimizer': ['adam', 'sgd']
+    #     })
+    # Results: 
+    # Adam seems to be prefered over SGD. 
+    # Smaller learning rate seems to be prefered.
+    # Smaller batch sizes seem to be prefered.
+
+    # Second pass:
+    hyperparameter_values = Hyperparameters({
+        'learning_rate': [0.05, 0.001, 0.0001],
+        'batch_size': [8, 16, 32],
+        'optimizer': ['adam']
+        })
+    # Best: optimizer: adam, batch size: 8, learning rate: 0.001
+    return hyperparameter_values
 
 def _tune_cnn_hyperparameters(full_train_labels: np.ndarray, 
     gram_type: str) -> None:
@@ -290,11 +328,7 @@ def _tune_cnn_hyperparameters(full_train_labels: np.ndarray,
     start_time = time.time()
 
     # Hyperparameters to tune.
-    # [0.1, 0.05, 0.01, 0.005, 0.001]
-    hyperparameter_values = Hyperparameters({
-        'learning_rate': [0.005, 0.001],
-        'batch_size': [32, 64],
-        })
+    hyperparameter_values = _get_hyperparameters()
     hyperparameter_combinations = hyperparameter_values.sample_combinations()
 
     # Create Tensorboard writer.
@@ -305,7 +339,7 @@ def _tune_cnn_hyperparameters(full_train_labels: np.ndarray,
                 hyperparameter_dict, full_train_labels, gram_type)
 
             writer.add_hparams(hyperparameter_dict,
-                {'hparam/validation_accuracy': validation_accuracy_list[-1]})
+                {f'hparam/{gram_type}/validation_accuracy': validation_accuracy_list[-1]})
 
     utils_io.print_elapsed_time(start_time, time.time())
 
@@ -340,14 +374,21 @@ def _test_network(cnn: CNN, test_labels: np.ndarray, hyperparameter_dict: dict,
 def _test_best_cnn_hyperparameters(full_train_labels: np.ndarray, 
     test_labels: np.ndarray, gram_type: str) -> None:
     """Use CNN with best hyperparameters to predict labels for test data.
-    Produce accuracy and loss graphs
-    for training and validation data, as well as accuracy and loss values for 
-    test data.
+    Produces accuracy and loss graphs for training and validation data, as 
+    well as accuracy and loss values for test data.
     """
-    hyperparameter_dict = {
-        'learning_rate': 0.001,
-        'batch_size': 64,
-        }
+    hyperparameter_dict = {}
+    if gram_type == 'spectrograms':
+        hyperparameter_dict = {}
+    elif gram_type == 'scaleograms':
+        hyperparameter_dict = {
+            'learning_rate': 0.001,
+            'batch_size': 8,
+            'optimizer': 'adam',
+            }
+    else:
+        raise Exception('gram_type must be "spectrograms" or "scaleograms"')
+
     (cnn, training_accuracy_list, 
         training_loss_list, 
         validation_accuracy_list, 
@@ -362,7 +403,27 @@ def _test_best_cnn_hyperparameters(full_train_labels: np.ndarray,
         f'Training and validation loss of classification of {gram_type}', 
         'Loss', PLOTS_FOLDER, f'3_{gram_type}_loss.html')
 
-    _test_network(cnn, test_labels, hyperparameter_dict, gram_type)
+    (test_accuracy, test_loss) = _test_network(cnn, test_labels, 
+        hyperparameter_dict, gram_type)
+
+    with SummaryWriter('runs', filename_suffix='') as writer:
+        num_epochs_train_val = len(training_accuracy_list)
+        for i in range(num_epochs_train_val):
+            writer.add_scalars(f'{gram_type}/accuracy', {
+                'training': training_accuracy_list[i],
+                'validation': validation_accuracy_list[i]
+                }, i)
+            writer.add_scalars(f'{gram_type}/loss', {
+                'training': training_loss_list[i],
+                'validation': validation_loss_list[i]
+                }, i)
+        # writer.add_scalar(f'{gram_type}/test_accuracy', test_accuracy)
+        # writer.add_scalar(f'{gram_type}/test_loss', test_loss)
+
+    # Scaleograms 
+    # Test accuracy: 88.22%
+    # Test loss: 0.4
+
 
 
 def _get_gaussian_filter(b: float, b_list: np.ndarray, 
@@ -426,7 +487,7 @@ def scenario2(data: SignalData) -> None:
     _save_gram_images(data.test_labels, data.activity_labels, 'spectrograms')
 
     _tune_cnn_hyperparameters(data.train_labels, 'spectrograms')
-    _test_best_cnn_hyperparameters(data.train_labels, data.test_labels, 'spectrograms')
+    # _test_best_cnn_hyperparameters(data.train_labels, data.test_labels, 'spectrograms')
 
 
 def _create_scaleogram(signal: np.ndarray, graph_wavelet_signal: bool) -> np.ndarray:
@@ -505,8 +566,8 @@ def scenario3(data: SignalData) -> None:
     _save_grams(data.test_signals, SCALEOGRAMS_TEST_FILE_NAME, 'scaleograms')
     _save_gram_images(data.test_labels, data.activity_labels, 'scaleograms')
     _save_wavelets()
-    _tune_cnn_hyperparameters(data.train_labels, 'scaleograms')
-    # _test_best_cnn_hyperparameters(data.train_labels, data.test_labels, 'scaleograms')
+    # _tune_cnn_hyperparameters(data.train_labels, 'scaleograms')
+    _test_best_cnn_hyperparameters(data.train_labels, data.test_labels, 'scaleograms')
 
 def main() -> None:
     """Main program.

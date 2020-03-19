@@ -34,10 +34,6 @@ class CNN(nn.Module):
         # Cross entropy loss = softmax + negative log likelihood.
         self._loss_function = nn.CrossEntropyLoss()
 
-        # Convert the model parameters to torch's float so they match 
-        # input type.
-        self.float()
-
         print(f'  {self}')
 
 

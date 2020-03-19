@@ -9,14 +9,14 @@ import plotly.io as pio
 COLORS = ['#f4792e', '#24624f', '#c7303b', '#457abf', '#298964', '#ffd769']
 
 
-def graph_nn_results(train_results: List[float], test_results: List[float], 
+def graph_nn_results(train_results: List[float], validation_results: List[float], 
     title: str, y_title_test: str, dir_name: str, file_name: str) -> None:
     """
     Plots accuracy or loss of a neural network over epochs, for training and
-    test set.
+    validation sets.
     Args:
         train_results (List[float]): List of train results.
-        test_results (List[float]): List of test results.
+        validation_results (List[float]): List of validation results.
         yaxis_title (str): The title of the y axis, typically Accuracy or Loss.
         title (str): The title of the graph.
         dir_name (str): The folder where we want to save the graph.
@@ -33,9 +33,9 @@ def graph_nn_results(train_results: List[float], test_results: List[float],
         name='Training'))
     fig.add_trace(go.Scatter(
         x=epochs, 
-        y=test_results, 
+        y=validation_results, 
         line=dict(color=COLORS[1]),
-        name='Test'))
+        name='Validation'))
     fig.update_xaxes(
         title_text='Epoch')
     fig.update_yaxes(

@@ -37,8 +37,6 @@ def fit(nn: torch.nn.Module, generator: data.DataLoader,
     """
     # Use CUDA.
     device = torch.device('cuda:0' if use_cuda else 'cpu')
-    # Transfer network's parameters to GPU.
-    nn = nn.to(device)
 
     accuracy_list = []
     loss_list = []
