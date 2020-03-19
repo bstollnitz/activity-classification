@@ -1,7 +1,7 @@
 # Acivity classification
 
 *Technologies:* Python, PyTorch, PyWavelets, NumPy, Plotly, Tensorboard, H5py, Tqdm, PIL. <br>
-*Topics:* classification, signal processing, time series. <br>
+*Topics:* deep learning, classification, signal processing, time series. <br>
 
 ## Description
 
