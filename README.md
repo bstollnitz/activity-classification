@@ -1,7 +1,7 @@
-# Activity classification
+# Human activity classification
 
 *Technologies:* Python, PyTorch, PyWavelets, NumPy, Plotly, Tensorboard, H5py, Tqdm, Pillow. <br>
-*Topics:* deep learning, convolutional neural network (CNN), classification, signal processing, time-series. <br>
+*Topics:* deep learning, convolutional neural network (CNN), continuous wavelet transform, Gabor transform, classification, signal processing, time-series. <br>
 
 ## Description
 
