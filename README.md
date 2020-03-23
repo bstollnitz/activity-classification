@@ -1,12 +1,12 @@
 # Activity classification
 
 *Technologies:* Python, PyTorch, PyWavelets, NumPy, Plotly, Tensorboard, H5py, Tqdm, Pillow. <br>
-*Topics:* deep learning, classification, signal processing, time series. <br>
+*Topics:* deep learning, convolutional neural network (CNN), classification, signal processing, time-series. <br>
 
 ## Description
 
 <p float="left">
-  <img src="readme_files/spectrograms.png?raw=true" width="700" />
+  <img src="https://github.com/bstollnitz/activity-classification/blob/master/readme_files/spectrograms.png?raw=true" width="700" />
 </p>
 
 In this project, I use three different approaches to classify temporal signals according to the associated activity. The input data consists of several thousand short snippets of measurements obtained from nine sensors (such as acceleration and gyroscope) while people performed six different activities (such as walking or sitting). In my first approach, I train a simple feed-forward network using the raw temporal signals and associated labels. In my second approach, I compute spectrograms by applying a Gabor transform to the temporal signals, and train a CNN to classify the spectrograms. In my third approach, I compute scaleograms by using a continuous wavelet transform, and train a CNN to classify the scaleograms.
@@ -20,8 +20,16 @@ of my masters in Applied Mathematics.
 
 To run this project:
 
+(Windows)
 ```sh
-conda env create -f environment.yml
+conda env create -f environment_win.yml
+conda activate activity-classification
+python main.py
+```
+
+(Mac)
+```sh
+conda env create -f environment_mac.yml
 conda activate activity-classification
 python main.py
 ```
