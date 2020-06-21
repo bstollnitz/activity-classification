@@ -47,7 +47,7 @@ def graph_nn_results(train_results: List[float], validation_results: List[float]
         )
 
     local_dir_path = Path('.', dir_name)
-    local_dir_path.mkdir(exist_ok=True)
+    local_dir_path.mkdir(exist_ok=True, parents=True)
     path = Path(local_dir_path, file_name)
     pio.write_html(fig, str(path))
 
@@ -69,8 +69,6 @@ def graph_overlapping_lines(x: np.ndarray, y: np.ndarray, legend: List[str],
         dir_name (str): The folder where we want to save the graph.
         file_name (str): The name of the file where we'll save the graph.
     """
-    path = Path(dir_name, file_name)
-
     fig = go.Figure()
     for i in range(len(x)):
         fig.add_trace(
@@ -87,6 +85,10 @@ def graph_overlapping_lines(x: np.ndarray, y: np.ndarray, legend: List[str],
         yaxis_title_text=yaxis_title,
         title_text=title,
     )
+
+    local_dir_path = Path('.', dir_name)
+    local_dir_path.mkdir(exist_ok=True, parents=True)
+    path = Path(local_dir_path, file_name)
     pio.write_html(fig, str(path))
 
 
@@ -103,8 +105,6 @@ def graph_2d_line(x: np.ndarray, y: np.ndarray,
         dir_name (str): The folder where we want to save the graph.
         file_name (str): The name of the file where we'll save the graph.
     """
-    path = Path(dir_name, file_name)
-
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
@@ -120,4 +120,8 @@ def graph_2d_line(x: np.ndarray, y: np.ndarray,
         xaxis_title_text=xaxis_title,
         yaxis_title_text=yaxis_title,
     )
+
+    local_dir_path = Path('.', dir_name)
+    local_dir_path.mkdir(exist_ok=True, parents=True)
+    path = Path(local_dir_path, file_name)
     pio.write_html(fig, str(path))
