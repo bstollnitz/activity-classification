@@ -62,7 +62,6 @@ def extract_all_zips(dir_name: str) -> bool:
         for file_path in dir_path.iterdir():
             if file_path.suffix == '.zip':
                 with zipfile.ZipFile(file_path) as zip_obj:
-                    file_path.unlink()
                     zip_obj.extractall(dir_path)
                     extracted = True
     
